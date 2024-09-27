@@ -11,8 +11,7 @@ from matplotlib import pyplot as plt
 import mbd
 
 # NOTE: enable this if you want higher precision
-# config.update("jax_enable_x64", True)
-
+config.update("jax_enable_x64", True)
 
 ## load config
 @dataclass
@@ -97,20 +96,24 @@ def run_diffusion(args: Args):
     @jax.jit
     def reverse_once(carry, unused):
         i, rng, Ybar_i = carry
+        # Ybar_i is the current best estimate for controls / sqrt(alphas_bar[i - 1])
         Yi = Ybar_i * jnp.sqrt(alphas_bar[i])
 
         # sample from q_i
         rng, Y0s_rng = jax.random.split(rng)
         eps_u = jax.random.normal(Y0s_rng, (args.Nsample, args.Hsample, Nu))
+        # actually this is p(Yi | Y0)
         Y0s = eps_u * sigmas[i] + Ybar_i
         Y0s = jnp.clip(Y0s, -1.0, 1.0)
 
         # esitimate mu_0tm1
+        # qs are rollouted states
         rewss, qs = jax.vmap(rollout_us, in_axes=(None, 0))(state_init, Y0s)
         rews = rewss.mean(axis=-1)
         rew_std = rews.std()
         rew_std = jnp.where(rew_std < 1e-4, 1.0, rew_std)
         rew_mean = rews.mean()
+        # since other probabilities such as dynamics are 1, here we only have rewards
         logp0 = (rews - rew_mean) / rew_std / args.temp_sample
 
         # evalulate demo
@@ -149,6 +152,7 @@ def run_diffusion(args: Args):
 
     rng_exp, rng = jax.random.split(rng)
     Yi = reverse(YN, rng_exp)
+
     if not args.not_render:
         path = f"{mbd.__path__[0]}/../results/{args.env_name}"
         if not os.path.exists(path):
@@ -176,6 +180,7 @@ def run_diffusion(args: Args):
             webpage = render_us(state_init, Yi[-1])
             with open(f"{path}/rollout.html", "w") as f:
                 f.write(webpage)
+    
     rewss_final, _ = rollout_us(state_init, Yi[-1])
     rew_final = rewss_final.mean()
 

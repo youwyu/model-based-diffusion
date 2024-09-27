@@ -97,9 +97,14 @@ def run_path_integral(args: Args):
     step_env_jit = jax.jit(env.step)
     reset_env_jit = jax.jit(env.reset)
     eval_us = jax.jit(functools.partial(mbd.utils.eval_us, step_env_jit))
-    render_us = functools.partial(
-        mbd.utils.render_us, step_env_jit, env.sys.replace(dt=env.dt)
-    )
+    
+    if hasattr(env.sys, "dt"):
+        render_us = functools.partial(
+            mbd.utils.render_us, step_env_jit, env.sys.replace(dt=env.dt)
+        )
+    else:
+        print("Does not have dt argument.")
+        render_us = functools.partial(mbd.utils.render_us, step_env_jit, env.sys)
 
     rng, rng_reset = jax.random.split(rng)  # NOTE: rng_reset should never be changed.
     state_init = reset_env_jit(rng_reset)
